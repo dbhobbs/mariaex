@@ -80,6 +80,7 @@ defmodule Mariaex.RowParser do
   defp type_to_atom({:float, :field_type_float}, _),         do: :float32
   defp type_to_atom({:float, :field_type_double}, _),        do: :float64
   defp type_to_atom({:bit, :field_type_bit}, _),             do: :bit
+  defp type_to_atom({:geometry, :field_type_geometry}, _),   do: :geometry
   defp type_to_atom({:null, :field_type_null}, _),           do: nil
 
   defp decode_bin_rows(<<rest::bits>>, [_ | fields], nullint, acc, json_library) when (nullint &&& 1) === 1 do
@@ -152,6 +153,10 @@ defmodule Mariaex.RowParser do
 
   defp decode_bin_rows(<<rest::bits>>, [:json | fields], null_bitfield, acc, json_library) do
     decode_json(rest, fields, null_bitfield >>> 1, acc, json_library)
+  end
+
+  defp decode_bin_rows(<<rest::bits>>, [:geometry | fields], null_bitfield, acc, json_library) do
+    decode_geometry(rest, fields, null_bitfield >>> 1, acc, json_library)
   end
 
   defp decode_bin_rows(<<rest::bits>>, [:nil | fields], null_bitfield, acc, json_library) do
@@ -298,6 +303,10 @@ defmodule Mariaex.RowParser do
    json = json_library.decode!(string)
    decode_bin_rows(rest, fields, nullint, [json | acc], json_library)
  end
+
+  defp decode_geometry(<<25::8-little, srid::32-little, 1::8-little, 1::32-little, x::little-float-64, y::little-float-64, rest::bits >>, fields, null_bitfield, acc, json_library) do
+    decode_bin_rows(rest, fields, null_bitfield, [%Mariaex.Geometry.Point{srid: srid, coordinates: {x, y}} | acc], json_library)
+  end
 
   ### TEXT ROW PARSER
 
